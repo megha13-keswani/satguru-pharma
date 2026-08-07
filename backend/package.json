@@ -1,6 +1,9 @@
 {
   "name": "satguru-pharma-backend",
   "version": "1.0.0",
+  "engines": {
+  "node": "22.x"
+},
   "description": "Satguru Pharma - Wholesale Medicine Ordering Platform API",
   "main": "src/server.js",
   "scripts": {
