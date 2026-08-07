@@ -1,0 +1,314 @@
+// Satguru Pharma — Prisma Schema
+// Wholesale medicine ordering platform for licensed pharmacies/wholesalers
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  WHOLESALER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentTerm {
+  CREDIT
+  ADVANCE
+  NET_30
+}
+
+enum SyncSource {
+  MARG
+  INTAS
+}
+
+enum SyncStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  role          Role     @default(WHOLESALER)
+  name          String
+  phone         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop          Shop?
+  notifications Notification[]
+}
+
+model Shop {
+  id                String         @id @default(uuid())
+  user              User           @relation(fields: [userId], references: [id])
+  userId            String         @unique
+  shopName          String
+  ownerName         String
+  gstNumber         String         @unique
+  drugLicenseNumber String         @unique
+  phone             String
+  address           String
+  approvalStatus    ApprovalStatus @default(PENDING)
+  rejectionReason   String?
+  paymentTerm       PaymentTerm    @default(ADVANCE)
+  marginCode        String?        // linked MARG customer/account code
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  addresses  ShopAddress[]
+  carts      Cart[]
+  orders     Order[]
+  prescriptions Prescription[]
+  messages   Message[]
+}
+
+model ShopAddress {
+  id        String   @id @default(uuid())
+  shop      Shop     @relation(fields: [shopId], references: [id])
+  shopId    String
+  label     String
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  pincode   String
+  isDefault Boolean  @default(false)
+
+  orders    Order[]
+}
+
+model Category {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  icon      String?
+  medicines Medicine[]
+}
+
+model Medicine {
+  id                  String   @id @default(uuid())
+  name                String
+  brand               String
+  composition         String   // salt / composition, used for substitute matching
+  manufacturer        String
+  category            Category @relation(fields: [categoryId], references: [id])
+  categoryId          String
+  hsnCode             String
+  gstPercent          Float    @default(12)
+  mrp                 Float
+  wholesalePrice      Float
+  stripsPerPack       Int      @default(1)
+  unitsPerStrip       Int      @default(10)
+  stockStrips         Int      @default(0)
+  lowStockThreshold   Int      @default(50)
+  stockStatus         StockStatus @default(IN_STOCK)
+  stockOverride       Boolean  @default(false) // admin manual override flag
+  storageInstructions String?
+  prescriptionRequired Boolean @default(false)
+  active              Boolean  @default(true)
+  batchNumber         String?
+  expiryDate          DateTime?
+  marginItemCode      String?  // MARG item code
+  intasProductCode    String?  // Intas product code
+  source              SyncSource? // where this item is authoritative (MARG/INTAS) if synced
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  images       MedicineImage[]
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  stockLogs    StockLog[]
+  asPrimary    Substitute[] @relation("PrimaryMedicine")
+  asSubstitute Substitute[] @relation("SubstituteMedicine")
+
+  @@index([composition])
+  @@index([name])
+  @@index([brand])
+}
+
+model MedicineImage {
+  id         String   @id @default(uuid())
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+  medicineId String
+  url        String   // S3 URL
+  isPrimary  Boolean  @default(false)
+}
+
+// Same-salt alternative mapping between medicines
+model Substitute {
+  id                  String   @id @default(uuid())
+  medicine            Medicine @relation("PrimaryMedicine", fields: [medicineId], references: [id])
+  medicineId          String
+  substituteMedicine  Medicine @relation("SubstituteMedicine", fields: [substituteMedicineId], references: [id])
+  substituteMedicineId String
+
+  @@unique([medicineId, substituteMedicineId])
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  shop      Shop       @relation(fields: [shopId], references: [id])
+  shopId    String
+  isDraft   Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  items CartItem[]
+}
+
+model CartItem {
+  id            String   @id @default(uuid())
+  cart          Cart     @relation(fields: [cartId], references: [id])
+  cartId        String
+  medicine      Medicine @relation(fields: [medicineId], references: [id])
+  medicineId    String
+  quantityStrips Int     @default(1)
+
+  @@unique([cartId, medicineId])
+}
+
+model Prescription {
+  id        String   @id @default(uuid())
+  shop      Shop     @relation(fields: [shopId], references: [id])
+  shopId    String
+  fileUrl   String
+  note      String?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  orderId   String?  @unique
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  orderNumber   String      @unique
+  shop          Shop        @relation(fields: [shopId], references: [id])
+  shopId        String
+  address       ShopAddress?@relation(fields: [addressId], references: [id])
+  addressId     String?
+  status        OrderStatus @default(PLACED)
+  paymentTerm   PaymentTerm
+  notes         String?
+  subtotal      Float
+  gstTotal      Float
+  grandTotal    Float
+  margVoucherId String?     // MARG voucher/sale entry ref after sync
+  whatsappSent  Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  items       OrderItem[]
+  invoice     Invoice?
+  prescription Prescription?
+  tracking    OrderTracking[]
+
+  @@index([shopId])
+}
+
+model OrderItem {
+  id             String   @id @default(uuid())
+  order          Order    @relation(fields: [orderId], references: [id])
+  orderId        String
+  medicine       Medicine @relation(fields: [medicineId], references: [id])
+  medicineId     String
+  medicineName   String   // snapshot at time of order
+  batchNumber    String?
+  expiryDate     DateTime?
+  hsnCode        String
+  quantityStrips Int
+  mrp            Float
+  rate           Float    // wholesale rate at time of order
+  gstPercent     Float
+  gstAmount      Float
+  total          Float
+}
+
+model OrderTracking {
+  id        String      @id @default(uuid())
+  order     Order       @relation(fields: [orderId], references: [id])
+  orderId   String
+  status    OrderStatus
+  note      String?
+  createdAt DateTime    @default(now())
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  order         Order    @relation(fields: [orderId], references: [id])
+  orderId       String   @unique
+  invoiceNumber String   @unique
+  pdfUrl        String   // S3 URL of generated PDF
+  emailedAt     DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model StockLog {
+  id         String   @id @default(uuid())
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+  medicineId String
+  change     Int      // +/- strips
+  reason     String   // "ORDER", "MARG_SYNC", "INTAS_SYNC", "ADMIN_ADJUST"
+  resultingStock Int
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  title     String
+  body      String
+  type      String   // LOW_STOCK, EXPIRY_ALERT, ORDER_STATUS, APPROVAL, SYNC_ERROR
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model MargSyncLog {
+  id          String     @id @default(uuid())
+  source      SyncSource @default(MARG)
+  direction   String     // "INBOUND" (Marg->Satguru) or "OUTBOUND"
+  status      SyncStatus
+  itemsSynced Int        @default(0)
+  errorDetail String?
+  triggeredBy String?    // "webhook", "manual", "cron"
+  createdAt   DateTime   @default(now())
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  shop       Shop     @relation(fields: [shopId], references: [id])
+  shopId     String
+  senderRole Role
+  body       String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([shopId])
+}
