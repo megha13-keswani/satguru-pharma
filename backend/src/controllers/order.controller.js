@@ -6,6 +6,7 @@ const { pushOrderAsVoucher } = require('../integrations/marg.adapter');
 const { placeDistributorOrder } = require('../integrations/intas.adapter');
 const { sendOrderConfirmation } = require('../services/whatsapp.service');
 const { notifyOrderStatus } = require('../services/notification.service');
+const { logNotification } = require('../services/notification.service');
 
 function computeStockStatus(stockStrips, threshold) {
   if (stockStrips <= 0) return 'OUT_OF_STOCK';
@@ -106,6 +107,15 @@ exports.placeOrder = async (req, res, next) => {
       include: { shop: true, items: { include: { medicine: true } } },
     });
 
+    // Notify all admins of the new order
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
+    await Promise.all(admins.map((admin) => logNotification(
+      admin.id,
+      'New order placed',
+      `${orderWithItems.shop.shopName} placed order ${orderWithItems.orderNumber} — ₹${orderWithItems.grandTotal.toFixed(2)}`,
+      'ORDER_STATUS'
+    )));
+
     pushOrderAsVoucher(orderWithItems)
       .then((voucherId) => voucherId && prisma.order.update({ where: { id: order.id }, data: { margVoucherId: voucherId } }))
       .catch((e) => console.error('MARG voucher push failed:', e.message));
@@ -188,6 +198,10 @@ exports.updateStatus = async (req, res, next) => {
     const valid = ['PLACED', 'CONFIRMED', 'DISPATCHED', 'DELIVERED', 'CANCELLED'];
     if (!valid.includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
+    if (!req.user.isSuperAdmin && status !== 'DELIVERED') {
+      return res.status(403).json({ error: 'Delivery staff can only mark orders as Delivered.' });
+    }
+
     const order = await prisma.order.update({
       where: { id: req.params.id },
       data: { status, tracking: { create: { status, note } } },
@@ -195,7 +209,24 @@ exports.updateStatus = async (req, res, next) => {
     });
 
     notifyOrderStatus(order, order.shop.user.email).catch((e) => console.error('Status email failed:', e.message));
+    await logNotification(
+      order.shop.userId,
+      'Order status updated',
+      `Your order ${order.orderNumber} is now ${status}.`,
+      'ORDER_STATUS'
+    );
 
+    res.json({ order });
+  } catch (err) { next(err); }
+};
+exports.updatePayment = async (req, res, next) => {
+  try {
+    if (!req.user.isSuperAdmin) return res.status(403).json({ error: 'Only the main admin can update payment.' });
+    const { amountPaid } = req.body;
+    const order = await prisma.order.update({
+      where: { id: req.params.id },
+      data: { amountPaid: Number(amountPaid) },
+    });
     res.json({ order });
   } catch (err) { next(err); }
 };

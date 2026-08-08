@@ -65,6 +65,7 @@ model User {
 
   shop          Shop?
   notifications Notification[]
+  isSuperAdmin  Boolean  @default(false)
 }
 
 model Shop {
@@ -219,6 +220,7 @@ model Order {
   subtotal      Float
   gstTotal      Float
   grandTotal    Float
+  amountPaid    Float       @default(0)
   margVoucherId String?     // MARG voucher/sale entry ref after sync
   whatsappSent  Boolean     @default(false)
   createdAt     DateTime    @default(now())
@@ -228,6 +230,7 @@ model Order {
   invoice     Invoice?
   prescription Prescription?
   tracking    OrderTracking[]
+
 
   @@index([shopId])
 }

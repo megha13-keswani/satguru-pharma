@@ -30,6 +30,13 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+function requireSuperAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'ADMIN' || !req.user.isSuperAdmin) {
+    return res.status(403).json({ error: 'Only the main admin can perform this action' });
+  }
+  next();
+}
+
 // Only allow WHOLESALER role with an APPROVED shop
 function requireApprovedWholesaler(req, res, next) {
   if (!req.user || req.user.role !== 'WHOLESALER') {
@@ -43,4 +50,4 @@ function requireApprovedWholesaler(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireAdmin, requireApprovedWholesaler };
+module.exports = { requireAuth, requireAdmin, requireApprovedWholesaler, requireSuperAdmin };

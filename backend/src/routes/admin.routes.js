@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const ctrl = require('../controllers/admin.controller');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(requireAuth, requireAdmin);
@@ -23,22 +23,25 @@ const upload = multer({
 router.get('/dashboard', ctrl.dashboard);
 
 // Shop approvals
-router.get('/shops/pending', ctrl.pendingShops);
-router.get('/shops', ctrl.listShops);
-router.get('/shops/:id/detail', ctrl.shopDetail);
-router.post('/shops/:id/approve', ctrl.approveShop);
-router.post('/shops/:id/reject', ctrl.rejectShop);
-router.post('/shops/:id/toggle-enabled', ctrl.toggleShopEnabled);
+router.get('/shops/pending', requireSuperAdmin, ctrl.pendingShops);
+router.get('/shops', requireSuperAdmin, ctrl.listShops);
+router.get('/shops/:id/detail', requireSuperAdmin, ctrl.shopDetail);
+router.post('/shops/:id/approve', requireSuperAdmin, ctrl.approveShop);
+router.post('/shops/:id/reject', requireSuperAdmin, ctrl.rejectShop);
+router.post('/shops/:id/toggle-enabled', requireSuperAdmin, ctrl.toggleShopEnabled);
 
 // Medicine management
-router.get('/medicines', ctrl.listMedicines);
-router.post('/medicines', ctrl.createMedicine);
-router.put('/medicines/:id', ctrl.updateMedicine);
-router.delete('/medicines/:id', ctrl.deleteMedicine);
-router.post('/medicines/:id/images', upload.array('images', 6), ctrl.uploadMedicineImages);
-router.put('/medicines/:id/image-url', ctrl.setImageUrl);
-router.post('/medicines/:id/substitutes', ctrl.setSubstitutes);
-router.patch('/medicines/:id/stock-override', ctrl.overrideStock);
+router.get('/medicines', requireSuperAdmin, ctrl.listMedicines);
+router.post('/medicines', requireSuperAdmin, ctrl.createMedicine);
+router.put('/medicines/:id', requireSuperAdmin, ctrl.updateMedicine);
+router.delete('/medicines/:id', requireSuperAdmin, ctrl.deleteMedicine);
+router.post('/medicines/:id/images', requireSuperAdmin, upload.array('images', 6), ctrl.uploadMedicineImages);
+router.post('/medicines/:id/substitutes', requireSuperAdmin, ctrl.setSubstitutes);
+router.patch('/medicines/:id/stock-override', requireSuperAdmin, ctrl.overrideStock);
+router.put('/medicines/:id/image-url', requireSuperAdmin, ctrl.setImageUrl);
+router.get('/orders-matrix', requireSuperAdmin, ctrl.ordersMatrix);
+router.get('/revenue-by-date', requireSuperAdmin, ctrl.revenueByDate);
+router.get('/revenue-by-date/:date', requireSuperAdmin, ctrl.revenueByDateDetail);
 
 // Notification log
 router.get('/notifications', ctrl.notificationLog);

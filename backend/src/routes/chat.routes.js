@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { logNotification } = require('../services/notification.service');
 
 const router = express.Router();
 
@@ -29,6 +30,10 @@ router.post('/mine', requireAuth, async (req, res, next) => {
     const message = await prisma.message.create({
       data: { shopId: req.user.shop.id, senderRole: 'WHOLESALER', body: body.trim() },
     });
+    const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
+    await Promise.all(admins.map((admin) => logNotification(
+      admin.id, 'New message', `${req.user.shop.shopName}: ${body.trim().slice(0, 60)}`, 'MESSAGE'
+    )));
     res.status(201).json({ message });
   } catch (err) { next(err); }
 });
@@ -71,6 +76,8 @@ router.post('/admin/:shopId', requireAuth, requireAdmin, async (req, res, next) 
     const message = await prisma.message.create({
       data: { shopId: req.params.shopId, senderRole: 'ADMIN', body: body.trim() },
     });
+    const shop = await prisma.shop.findUnique({ where: { id: req.params.shopId } });
+    await logNotification(shop.userId, 'New message from admin', body.trim().slice(0, 60), 'MESSAGE');
     res.status(201).json({ message });
   } catch (err) { next(err); }
 });

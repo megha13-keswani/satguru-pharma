@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -36,6 +37,7 @@ export default function Navbar() {
                 <Link to="/admin/inbox" className="text-sm font-medium text-gray-700 hover:text-[#1A3C6E]">Messages</Link>
               </>
             )}
+            <NotificationBell />
             <button
               onClick={handleLogout}
               className="text-sm font-medium text-white bg-[#1A3C6E] px-3 py-1.5 rounded-md hover:bg-[#142f57]"

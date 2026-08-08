@@ -199,3 +199,88 @@ exports.shopDetail = async (req, res, next) => {
     res.json({ shop, orders, stats: { totalOrders: orders.length, totalRevenue, lastOrderDate } });
   } catch (err) { next(err); }
 };
+
+// Shop x Orders matrix — every approved shop with all its orders (date, amount, paid, pending, status)
+exports.ordersMatrix = async (req, res, next) => {
+  try {
+    const shops = await prisma.shop.findMany({
+      where: { approvalStatus: 'APPROVED' },
+      include: {
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true, orderNumber: true, createdAt: true, status: true,
+            grandTotal: true, amountPaid: true,
+          },
+        },
+      },
+      orderBy: { shopName: 'asc' },
+    });
+    res.json({ shops });
+  } catch (err) { next(err); }
+};
+
+// Date-wise revenue breakdown (for clicking "Today's Revenue" card)
+exports.revenueByDate = async (req, res, next) => {
+  try {
+    const orders = await prisma.order.findMany({
+      where: { status: { not: 'CANCELLED' } },
+      select: { createdAt: true, grandTotal: true, amountPaid: true },
+    });
+
+    const byDate = {};
+    orders.forEach((o) => {
+      const key = o.createdAt.toISOString().slice(0, 10);
+      if (!byDate[key]) byDate[key] = { date: key, totalRevenue: 0, totalPaid: 0, totalPending: 0, orderCount: 0 };
+      byDate[key].totalRevenue += o.grandTotal;
+      byDate[key].totalPaid += o.amountPaid;
+      byDate[key].totalPending += (o.grandTotal - o.amountPaid);
+      byDate[key].orderCount += 1;
+    });
+
+    const result = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
+    res.json({ revenueByDate: result });
+  } catch (err) { next(err); }
+};
+
+// Shop-wise breakdown for a specific date
+exports.revenueByDateDetail = async (req, res, next) => {
+  try {
+    const { date } = req.params; // format: YYYY-MM-DD
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+
+    const orders = await prisma.order.findMany({
+      where: { createdAt: { gte: start, lte: end }, status: { not: 'CANCELLED' } },
+      include: { shop: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const byShop = {};
+    orders.forEach((o) => {
+      if (!byShop[o.shopId]) {
+        byShop[o.shopId] = {
+          shopId: o.shopId,
+          shopName: o.shop.shopName,
+          orderCount: 0,
+          totalBilled: 0,
+          totalPaid: 0,
+          totalPending: 0,
+          orders: [],
+        };
+      }
+      byShop[o.shopId].orderCount += 1;
+      byShop[o.shopId].totalBilled += o.grandTotal;
+      byShop[o.shopId].totalPaid += o.amountPaid;
+      byShop[o.shopId].totalPending += (o.grandTotal - o.amountPaid);
+      byShop[o.shopId].orders.push({
+        id: o.id, orderNumber: o.orderNumber, grandTotal: o.grandTotal,
+        amountPaid: o.amountPaid, status: o.status,
+      });
+    });
+
+    res.json({ date, shops: Object.values(byShop) });
+  } catch (err) { next(err); }
+};

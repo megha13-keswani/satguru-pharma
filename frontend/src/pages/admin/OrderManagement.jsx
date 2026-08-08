@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 
 const STATUS_STYLE = {
   PLACED: 'bg-blue-100 text-blue-700',
@@ -17,6 +18,7 @@ export default function OrderManagement() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [updating, setUpdating] = useState(null);
+  const { user } = useAuth();
 
   async function loadOrders() {
     setLoading(true);
@@ -79,14 +81,26 @@ export default function OrderManagement() {
               </p>
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_STYLE[order.status]}`}>{order.status}</span>
-                <select
-                  value={order.status}
-                  disabled={updating === order.id}
-                  onChange={(e) => updateStatus(order.id, e.target.value)}
-                  className="ml-auto text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#1A3C6E]/20"
-                >
-                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                {user.isSuperAdmin ? (
+                  <select
+                    value={order.status}
+                    disabled={updating === order.id}
+                    onChange={(e) => updateStatus(order.id, e.target.value)}
+                    className="ml-auto text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#1A3C6E]/20"
+                  >
+                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                ) : order.status !== 'DELIVERED' ? (
+                  <button
+                    onClick={() => updateStatus(order.id, 'DELIVERED')}
+                    disabled={updating === order.id}
+                    className="ml-auto text-sm font-semibold bg-green-600 text-white px-4 py-1.5 rounded-lg hover:bg-green-700 disabled:opacity-60"
+                  >
+                    Mark Delivered
+                  </button>
+                ) : (
+                  <span className="ml-auto text-xs text-gray-400">Delivered ✓</span>
+                )}
               </div>
             </div>
           ))}

@@ -12,5 +12,6 @@ router.get('/:id/track', requireAuth, ctrl.trackOrder);
 // Admin order management
 router.get('/admin/all', requireAuth, requireAdmin, ctrl.adminListAll);
 router.patch('/:id/status', requireAuth, requireAdmin, ctrl.updateStatus);
+router.patch('/:id/payment', requireAuth, requireAdmin, ctrl.updatePayment);
 
 module.exports = router;

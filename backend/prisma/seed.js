@@ -129,13 +129,25 @@ function pick(arr) { return arr[rand(0, arr.length - 1)]; }
 
 async function main() {
   // ---------- Admin ----------
-  const hashed = await bcrypt.hash('Admin@123', 10);
+ const hashed = await bcrypt.hash('Admin@123', 10);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@satgurupharma.com' },
-    update: {},
-    create: { email: 'admin@satgurupharma.com', password: hashed, name: 'Satguru Admin', role: 'ADMIN' },
+    update: { isSuperAdmin: true },
+    create: { email: 'admin@satgurupharma.com', password: hashed, name: 'Satguru Admin', role: 'ADMIN', isSuperAdmin: true },
   });
-  console.log('Admin ready:', admin.email);
+  console.log('Main admin ready:', admin.email, '(Super Admin)');
+
+  // 5 delivery staff admin accounts — can only view orders and mark them Delivered
+  for (let i = 1; i <= 5; i++) {
+    const deliveryHashed = await bcrypt.hash('Delivery@123', 10);
+    const email = `delivery${i}@satgurupharma.com`;
+    await prisma.user.upsert({
+      where: { email },
+      update: { isSuperAdmin: false },
+      create: { email, password: deliveryHashed, name: `Delivery Staff ${i}`, role: 'ADMIN', isSuperAdmin: false },
+    });
+  }
+  console.log('5 delivery admin accounts ready: delivery1..5@satgurupharma.com | password: Delivery@123');
 
   // ---------- Test wholesaler (pre-approved) ----------
   const shopPass = await bcrypt.hash('Test@1234', 10);
