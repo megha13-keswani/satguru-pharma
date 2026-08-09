@@ -19,7 +19,7 @@ const intasRoutes = require('./routes/intas.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const chatRoutes = require('./routes/chat.routes');
 const notificationRoutes = require('./routes/notification.routes');
-const seedRoutes = require('./routes/seed.routes');
+
 
 const app = express();
 
@@ -43,7 +43,7 @@ app.use('/api/integrations/intas', intasRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/seed', seedRoutes);
+
 
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 app.use(errorHandler);
